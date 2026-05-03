@@ -23,9 +23,9 @@ entry point for all client-facing API requests. It handles:
 
 | Feature                     | Status       | Notes                                    |
 |-----------------------------|--------------|------------------------------------------|
-| File upload endpoint        | ✅ Implemented | Returns mock `pending` status for now   |
-| File status lookup          | ✅ Implemented | Returns mock records                     |
-| Upload history list         | ✅ Implemented | Returns mock records                     |
+| File upload endpoint        | ✅ Implemented | Cloud Lambda stores to S3/DynamoDB; mock fallback locally |
+| File status lookup          | ✅ Implemented | Reads DynamoDB in cloud; mock fallback locally |
+| Upload history list         | ✅ Implemented | Reads DynamoDB in cloud; mock fallback locally |
 | Admin upload viewer         | ✅ Implemented | Returns all mock records                 |
 | Admin suspicious alerts     | ✅ Implemented | Returns mock alert records               |
 | API key auth (user)         | ✅ Implemented | `x-api-key` header                       |
@@ -36,6 +36,7 @@ entry point for all client-facing API requests. It handles:
 | Swagger / OpenAPI UI        | ✅ Implemented | Auto-generated at `/docs`                |
 | Structured stdout logging   | ✅ Implemented | Factor 11 compliant                      |
 | Docker container            | ✅ Implemented | Exposes port 8000                        |
+| Lambda cloud entrypoint     | ✅ Implemented | `index.handler` for API Gateway/Lambda   |
 
 ---
 

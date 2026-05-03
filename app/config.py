@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     validation_service_url: str = "http://validation-service:8001"
     database_url: str = "sqlite:///./dev.db"  # override in production
 
+    # AWS backing services
+    upload_bucket_name: str = ""
+    uploads_table_name: str = ""
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
