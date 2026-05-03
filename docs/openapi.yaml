@@ -1,0 +1,318 @@
+openapi: "3.0.3"
+info:
+  title: Secure File Validation — Gateway Service
+  description: |
+    API gateway for the Secure File Validation Service (SWE 455 Cloud Project).
+
+    ## Authentication
+    - **User endpoints** require the `x-api-key` header.
+    - **Admin endpoints** require the `x-admin-key` header.
+    - Keys are supplied via environment variables — never hardcoded.
+
+    ## Design Philosophy
+    This API is designed API-first (Factor 13). The contract is defined here
+    before implementation so that other services can integrate with stable endpoints.
+  version: "1.0.0"
+  contact:
+    name: Member 3 — API, Auth & Docs Lead
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+  - url: https://api.your-cloud-domain.com
+    description: Production (ECS / ALB)
+
+tags:
+  - name: Files
+    description: User file upload and query endpoints
+  - name: Admin
+    description: Admin-only management endpoints
+  - name: Observability
+    description: Health, readiness, and metrics endpoints
+
+paths:
+
+  # ── File Endpoints ────────────────────────────────────────────────────────
+
+  /files/upload:
+    post:
+      tags: [Files]
+      summary: Upload a file for validation
+      description: |
+        Accepts a file and queues it for validation by the validation engine.
+        Returns a `file_id` and an initial status of `pending`.
+        Poll `GET /files/{file_id}` for the final result.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The file to validate
+      parameters:
+        - in: query
+          name: user_id
+          schema:
+            type: string
+          required: false
+          description: Optional caller user identifier
+      responses:
+        "202":
+          description: File accepted and queued for validation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadResponse"
+              example:
+                file_id: f1a2b3c4-d5e6-7890-abcd-ef1234567890
+                status: pending
+                message: File received and queued for validation.
+                filename: report.pdf
+                size_bytes: 204800
+                uploaded_at: "2025-01-01T12:00:00Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: Validation error (missing file)
+
+  /files/{file_id}:
+    get:
+      tags: [Files]
+      summary: Get validation result for a specific file
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: file_id
+          required: true
+          schema:
+            type: string
+          description: UUID of the uploaded file
+      responses:
+        "200":
+          description: File record found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileRecord"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: File not found
+
+  /files:
+    get:
+      tags: [Files]
+      summary: List upload history for the current user
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: query
+          name: user_id
+          schema:
+            type: string
+          required: false
+          description: Filter records by user ID
+      responses:
+        "200":
+          description: List of file records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── Admin Endpoints ───────────────────────────────────────────────────────
+
+  /admin/uploads:
+    get:
+      tags: [Admin]
+      summary: View all uploads (admin)
+      security:
+        - AdminKeyAuth: []
+      responses:
+        "200":
+          description: All upload records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileListResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /admin/alerts:
+    get:
+      tags: [Admin]
+      summary: View suspicious upload alerts (admin)
+      security:
+        - AdminKeyAuth: []
+      responses:
+        "200":
+          description: All suspicious file alerts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertListResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  # ── Observability Endpoints ───────────────────────────────────────────────
+
+  /health:
+    get:
+      tags: [Observability]
+      summary: Basic liveness check
+      responses:
+        "200":
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /ready:
+    get:
+      tags: [Observability]
+      summary: Readiness check
+      responses:
+        "200":
+          description: All dependencies are reachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+
+  /metrics:
+    get:
+      tags: [Observability]
+      summary: Application runtime metrics
+      responses:
+        "200":
+          description: Current metrics snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricsResponse"
+
+# ── Components ────────────────────────────────────────────────────────────────
+
+components:
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+    AdminKeyAuth:
+      type: apiKey
+      in: header
+      name: x-admin-key
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid API key
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            detail: Invalid or missing API key.
+    Forbidden:
+      description: Missing or invalid admin key
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            detail: Invalid or missing admin key.
+
+  schemas:
+
+    ValidationStatus:
+      type: string
+      enum: [pending, accepted, rejected, suspicious]
+
+    UploadResponse:
+      type: object
+      properties:
+        file_id:    { type: string }
+        status:     { $ref: "#/components/schemas/ValidationStatus" }
+        message:    { type: string }
+        filename:   { type: string }
+        size_bytes: { type: integer }
+        uploaded_at: { type: string, format: date-time }
+
+    FileRecord:
+      type: object
+      properties:
+        file_id:          { type: string }
+        filename:         { type: string }
+        status:           { $ref: "#/components/schemas/ValidationStatus" }
+        size_bytes:       { type: integer }
+        user_id:          { type: string, nullable: true }
+        uploaded_at:      { type: string, format: date-time }
+        validated_at:     { type: string, format: date-time, nullable: true }
+        rejection_reason: { type: string, nullable: true }
+
+    FileListResponse:
+      type: object
+      properties:
+        total: { type: integer }
+        files:
+          type: array
+          items: { $ref: "#/components/schemas/FileRecord" }
+
+    AlertRecord:
+      type: object
+      properties:
+        alert_id:    { type: string }
+        file_id:     { type: string }
+        filename:    { type: string }
+        reason:      { type: string }
+        detected_at: { type: string, format: date-time }
+        user_id:     { type: string, nullable: true }
+
+    AlertListResponse:
+      type: object
+      properties:
+        total: { type: integer }
+        alerts:
+          type: array
+          items: { $ref: "#/components/schemas/AlertRecord" }
+
+    HealthResponse:
+      type: object
+      properties:
+        status:      { type: string }
+        service:     { type: string }
+        version:     { type: string }
+        environment: { type: string }
+
+    ReadinessResponse:
+      type: object
+      properties:
+        status:       { type: string }
+        dependencies: { type: object }
+
+    MetricsResponse:
+      type: object
+      properties:
+        uptime_seconds: { type: number }
+        total_uploads:  { type: integer }
+        accepted:       { type: integer }
+        rejected:       { type: integer }
+        suspicious:     { type: integer }
+        pending:        { type: integer }
+
+    ErrorResponse:
+      type: object
+      properties:
+        detail: { type: string }
