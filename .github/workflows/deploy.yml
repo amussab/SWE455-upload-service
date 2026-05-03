@@ -1,8 +1,13 @@
+<<<<<<< HEAD
 name: Deploy upload service
+=======
+name: Deploy Upload Service
+>>>>>>> 64960c9 (Add CI/CD pipeline)
 
 on:
   push:
     branches: [main]
+<<<<<<< HEAD
   workflow_dispatch:
 
 jobs:
@@ -43,3 +48,24 @@ jobs:
             --function-name upload-service \
             --s3-bucket ${{ vars.ARTIFACT_BUCKET }} \
             --s3-key upload.zip
+=======
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Zip application
+        run: zip -r upload.zip .
+
+      - name: Upload to S3
+        run: |
+          aws s3 cp upload.zip s3://file-validation-artifacts-12345/upload.zip
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+>>>>>>> 64960c9 (Add CI/CD pipeline)
